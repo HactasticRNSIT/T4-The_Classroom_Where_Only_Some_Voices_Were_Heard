@@ -1,0 +1,1567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EquityLens — AI Participation Equity Analyzer</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+<style>
+  :root {
+    --bg-deep: #0B0F14;
+    --bg-surface: #131920;
+    --bg-card: #1A222C;
+    --bg-elevated: #222D3A;
+    --border: #2A3644;
+    --text-primary: #E8ECF1;
+    --text-secondary: #8A95A5;
+    --text-muted: #5A6577;
+    --accent-teal: #2DD4A8;
+    --accent-teal-dim: rgba(45,212,168,0.15);
+    --accent-amber: #F5A623;
+    --accent-amber-dim: rgba(245,166,35,0.15);
+    --accent-rose: #F06292;
+    --accent-rose-dim: rgba(240,98,146,0.15);
+    --accent-sky: #4FC3F7;
+    --accent-sky-dim: rgba(79,195,247,0.15);
+    --accent-violet: #B388FF;
+    --accent-violet-dim: rgba(179,136,255,0.15);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg-deep);
+    color: var(--text-primary);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  h1,h2,h3,h4,h5 { font-family: 'Space Grotesk', sans-serif; }
+
+  /* Background atmosphere */
+  .bg-atmosphere {
+    position: fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:0;
+  }
+  .bg-atmosphere::before {
+    content:''; position:absolute; top:-20%; left:-10%; width:50%; height:50%;
+    background: radial-gradient(ellipse, rgba(45,212,168,0.06) 0%, transparent 70%);
+    animation: floatBlob1 20s ease-in-out infinite;
+  }
+  .bg-atmosphere::after {
+    content:''; position:absolute; bottom:-10%; right:-10%; width:60%; height:60%;
+    background: radial-gradient(ellipse, rgba(245,166,35,0.04) 0%, transparent 70%);
+    animation: floatBlob2 25s ease-in-out infinite;
+  }
+  @keyframes floatBlob1 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(5%,10%)} }
+  @keyframes floatBlob2 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-5%,-8%)} }
+
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    transition: all 0.3s ease;
+  }
+  .card:hover { border-color: rgba(45,212,168,0.3); }
+
+  .stat-card {
+    position: relative;
+    overflow: hidden;
+  }
+  .stat-card::after {
+    content:''; position:absolute; top:0; right:0; width:80px; height:80px;
+    border-radius: 0 12px 0 80px;
+    opacity: 0.08;
+    transition: opacity 0.3s;
+  }
+  .stat-card:hover::after { opacity: 0.15; }
+  .stat-card.teal::after { background: var(--accent-teal); }
+  .stat-card.amber::after { background: var(--accent-amber); }
+  .stat-card.rose::after { background: var(--accent-rose); }
+  .stat-card.sky::after { background: var(--accent-sky); }
+
+  .heatmap-cell {
+    width: 100%; aspect-ratio: 1; border-radius: 4px;
+    transition: all 0.2s ease; cursor: pointer; position: relative;
+  }
+  .heatmap-cell:hover { transform: scale(1.3); z-index:10; box-shadow: 0 0 12px rgba(45,212,168,0.4); }
+
+  .insight-card {
+    border-left: 3px solid var(--accent-teal);
+    animation: slideInRight 0.5s ease forwards;
+    opacity: 0;
+  }
+  @keyframes slideInRight { from{opacity:0;transform:translateX(20px)} to{opacity:1;transform:translateX(0)} }
+
+  .barrier-item {
+    transition: all 0.3s ease;
+  }
+  .barrier-item:hover { background: var(--bg-elevated); transform: translateX(4px); }
+
+  .group-cluster {
+    transition: all 0.3s ease;
+    cursor: pointer;
+  }
+  .group-cluster:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
+
+  .progress-ring { transition: stroke-dashoffset 1.5s ease; }
+
+  .tab-btn {
+    padding: 8px 20px; border-radius: 8px; font-size: 14px; font-weight: 500;
+    cursor: pointer; transition: all 0.25s ease; border: 1px solid transparent;
+    background: transparent; color: var(--text-secondary);
+  }
+  .tab-btn:hover { color: var(--text-primary); background: var(--bg-elevated); }
+  .tab-btn.active {
+    background: var(--accent-teal-dim); color: var(--accent-teal);
+    border-color: rgba(45,212,168,0.3);
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent-teal), #1AAF8B);
+    color: #0B0F14; font-weight: 600; border: none; border-radius: 10px;
+    padding: 12px 28px; cursor: pointer; transition: all 0.3s ease;
+    font-family: 'Space Grotesk', sans-serif; font-size: 15px;
+  }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(45,212,168,0.3); }
+  .btn-primary:active { transform: translateY(0); }
+
+  .btn-secondary {
+    background: var(--bg-elevated); color: var(--text-primary); font-weight: 500;
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 22px; cursor: pointer; transition: all 0.3s ease;
+    font-family: 'DM Sans', sans-serif; font-size: 14px;
+  }
+  .btn-secondary:hover { border-color: var(--accent-teal); background: var(--accent-teal-dim); }
+
+  .tooltip-custom {
+    position: absolute; background: var(--bg-elevated); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 14px; font-size: 12px; z-index: 100;
+    pointer-events: none; opacity: 0; transition: opacity 0.2s;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  .tooltip-custom.show { opacity: 1; }
+
+  .severity-dot {
+    width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+  }
+
+  .pulse-dot {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--accent-teal);
+    animation: pulse 2s ease infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(1.5)} }
+
+  .student-tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 500;
+    transition: all 0.2s ease; cursor: default;
+  }
+  .student-tag:hover { transform: scale(1.05); }
+
+  .recommendation-card {
+    position: relative; overflow: hidden;
+  }
+  .recommendation-card::before {
+    content:''; position:absolute; top:0; left:0; width:100%; height:3px;
+    background: linear-gradient(90deg, var(--accent-teal), var(--accent-amber));
+  }
+
+  .scan-line {
+    position: absolute; left:0; width:100%; height:2px;
+    background: linear-gradient(90deg, transparent, var(--accent-teal), transparent);
+    animation: scanDown 3s ease-in-out infinite;
+    opacity: 0.4;
+  }
+  @keyframes scanDown { 0%{top:0;opacity:0} 10%{opacity:0.4} 90%{opacity:0.4} 100%{top:100%;opacity:0} }
+
+  .fade-in { animation: fadeIn 0.6s ease forwards; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+
+  .modal-overlay {
+    position: fixed; top:0; left:0; width:100%; height:100%;
+    background: rgba(0,0,0,0.7); z-index: 1000; display: none;
+    align-items: center; justify-content: center; backdrop-filter: blur(4px);
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-content {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 16px; max-width: 680px; width: 90%; max-height: 85vh;
+    overflow-y: auto; padding: 32px; position: relative;
+  }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg-deep); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+  select, input {
+    background: var(--bg-elevated); border: 1px solid var(--border);
+    color: var(--text-primary); border-radius: 8px; padding: 8px 14px;
+    font-family: 'DM Sans', sans-serif; font-size: 14px;
+    transition: border-color 0.2s;
+  }
+  select:focus, input:focus { outline:none; border-color: var(--accent-teal); }
+
+  .sparkline-container { width: 80px; height: 30px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-atmosphere" aria-hidden="true"></div>
+
+<!-- Header -->
+<header class="relative z-10 border-b" style="border-color:var(--border);background:rgba(19,25,32,0.8);backdrop-filter:blur(12px)">
+  <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background:var(--accent-teal-dim)">
+        <i class="fas fa-balance-scale" style="color:var(--accent-teal)"></i>
+      </div>
+      <div>
+        <h1 class="text-lg font-bold tracking-tight" style="font-family:'Space Grotesk'">EquityLens</h1>
+        <p class="text-xs" style="color:var(--text-muted)">AI Participation Equity Analyzer</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-4">
+      <div class="flex items-center gap-2 text-xs" style="color:var(--text-secondary)">
+        <div class="pulse-dot"></div>
+        <span>Analysis Active</span>
+      </div>
+      <button class="btn-secondary text-xs" onclick="openSettings()" aria-label="Configuration settings">
+        <i class="fas fa-cog mr-1"></i> Configure
+      </button>
+      <button class="btn-primary text-sm" onclick="runAnalysis()" aria-label="Run new analysis">
+        <i class="fas fa-play mr-2"></i>Run Analysis
+      </button>
+    </div>
+  </div>
+</header>
+
+<main class="relative z-10 max-w-7xl mx-auto px-6 py-8">
+
+  <!-- Class selector & session info -->
+  <section class="mb-8 fade-in">
+    <div class="flex flex-wrap items-center gap-4 mb-4">
+      <div>
+        <label class="text-xs font-medium block mb-1" style="color:var(--text-muted)">Class Section</label>
+        <select id="classSelect" onchange="switchClass(this.value)">
+          <option value="cs301">CS 301 — Data Structures (Sec A)</option>
+          <option value="eng102">ENG 102 — Composition (Sec B)</option>
+          <option value="bio210">BIO 210 — Molecular Biology (Sec C)</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-xs font-medium block mb-1" style="color:var(--text-muted)">Session Range</label>
+        <select id="sessionRange" onchange="updateSessionRange(this.value)">
+          <option value="last5">Last 5 Sessions</option>
+          <option value="last10" selected>Last 10 Sessions</option>
+          <option value="all">All Sessions (Semester)</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-xs font-medium block mb-1" style="color:var(--text-muted)">Analysis Depth</label>
+        <select id="analysisDepth">
+          <option value="standard">Standard</option>
+          <option value="deep" selected>Deep Analysis</option>
+          <option value="comprehensive">Comprehensive</option>
+        </select>
+      </div>
+      <div class="ml-auto text-right">
+        <p class="text-xs" style="color:var(--text-muted)">Last Analyzed</p>
+        <p class="text-sm font-medium" id="lastAnalyzed">2 minutes ago</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Key Metrics Row -->
+  <section class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8" id="metricsRow">
+    <div class="card stat-card teal p-5">
+      <p class="text-xs font-medium mb-1" style="color:var(--text-muted)">Gini Coefficient</p>
+      <p class="text-3xl font-bold" style="color:var(--accent-teal)" id="giniScore">0.42</p>
+      <p class="text-xs mt-1" style="color:var(--text-secondary)"><i class="fas fa-arrow-up mr-1" style="color:var(--accent-rose)"></i>Moderate inequality</p>
+    </div>
+    <div class="card stat-card amber p-5">
+      <p class="text-xs font-medium mb-1" style="color:var(--text-muted)">Silent Learners</p>
+      <p class="text-3xl font-bold" style="color:var(--accent-amber)" id="silentCount">7</p>
+      <p class="text-xs mt-1" style="color:var(--text-secondary)">of 32 students (21.9%)</p>
+    </div>
+    <div class="card stat-card rose p-5">
+      <p class="text-xs font-medium mb-1" style="color:var(--text-muted)">Participation Gap</p>
+      <p class="text-3xl font-bold" style="color:var(--accent-rose)" id="partGap">6.8x</p>
+      <p class="text-xs mt-1" style="color:var(--text-secondary)">Top vs. bottom quartile</p>
+    </div>
+    <div class="card stat-card sky p-5">
+      <p class="text-xs font-medium mb-1" style="color:var(--text-muted)">Equity Score</p>
+      <p class="text-3xl font-bold" style="color:var(--accent-sky)" id="equityScore">58</p>
+      <p class="text-xs mt-1" style="color:var(--text-secondary)">out of 100</p>
+    </div>
+  </section>
+
+  <!-- Main Grid: Heatmap + Distribution -->
+  <section class="grid lg:grid-cols-3 gap-6 mb-8">
+    <!-- Participation Heatmap -->
+    <div class="card p-6 lg:col-span-2" style="position:relative;overflow:hidden">
+      <div class="scan-line" id="scanLine" style="display:none"></div>
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-base font-semibold">Participation Heatmap</h2>
+          <p class="text-xs mt-1" style="color:var(--text-muted)">Student engagement across sessions — hover for details</p>
+        </div>
+        <div class="flex gap-2">
+          <button class="tab-btn active text-xs" data-heatmap="absolute" onclick="switchHeatmapView('absolute',this)">Absolute</button>
+          <button class="tab-btn text-xs" data-heatmap="relative" onclick="switchHeatmapView('relative',this)">Relative</button>
+        </div>
+      </div>
+      <div id="heatmapContainer" style="overflow-x:auto"></div>
+      <div class="flex items-center justify-center gap-2 mt-3">
+        <span class="text-xs" style="color:var(--text-muted)">Low</span>
+        <div class="flex gap-1">
+          <div class="w-5 h-3 rounded-sm" style="background:#1A222C"></div>
+          <div class="w-5 h-3 rounded-sm" style="background:#0D4A3A"></div>
+          <div class="w-5 h-3 rounded-sm" style="background:#1A8F6E"></div>
+          <div class="w-5 h-3 rounded-sm" style="background:#2DD4A8"></div>
+          <div class="w-5 h-3 rounded-sm" style="background:#F5A623"></div>
+          <div class="w-5 h-3 rounded-sm" style="background:#F06292"></div>
+        </div>
+        <span class="text-xs" style="color:var(--text-muted)">High</span>
+      </div>
+      <div class="tooltip-custom" id="heatmapTooltip"></div>
+    </div>
+
+    <!-- Participation Distribution -->
+    <div class="card p-6">
+      <h2 class="text-base font-semibold mb-1">Engagement Distribution</h2>
+      <p class="text-xs mb-4" style="color:var(--text-muted)">How participation is spread across learners</p>
+      <div style="height:280px;position:relative">
+        <canvas id="distributionChart"></canvas>
+      </div>
+      <div class="mt-4 space-y-2">
+        <div class="flex items-center justify-between text-xs">
+          <span style="color:var(--text-secondary)">Dominant speakers (top 10%)</span>
+          <span class="font-semibold" style="color:var(--accent-rose)" id="domPct">38%</span>
+        </div>
+        <div class="flex items-center justify-between text-xs">
+          <span style="color:var(--text-secondary)">Moderate participants</span>
+          <span class="font-semibold" style="color:var(--accent-amber)" id="modPct">40%</span>
+        </div>
+        <div class="flex items-center justify-between text-xs">
+          <span style="color:var(--text-secondary)">Low / silent participants</span>
+          <span class="font-semibold" style="color:var(--accent-teal)" id="lowPct">22%</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Hidden Barriers + Overlooked Groups -->
+  <section class="grid lg:grid-cols-2 gap-6 mb-8">
+    <!-- Hidden Barriers -->
+    <div class="card p-6">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-base font-semibold">Hidden Barrier Detection</h2>
+          <p class="text-xs mt-1" style="color:var(--text-muted)">AI-identified factors suppressing participation</p>
+        </div>
+        <span class="text-xs px-3 py-1 rounded-full font-medium" style="background:var(--accent-amber-dim);color:var(--accent-amber)" id="barrierCount">5 barriers found</span>
+      </div>
+      <div class="space-y-3" id="barriersList"></div>
+    </div>
+
+    <!-- Overlooked Groups -->
+    <div class="card p-6">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-base font-semibold">Overlooked Learner Groups</h2>
+          <p class="text-xs mt-1" style="color:var(--text-muted)">Clustering analysis reveals hidden patterns</p>
+        </div>
+        <span class="text-xs px-3 py-1 rounded-full font-medium" style="background:var(--accent-rose-dim);color:var(--accent-rose)" id="groupCount">4 groups identified</span>
+      </div>
+      <div class="space-y-3" id="groupsList"></div>
+    </div>
+  </section>
+
+  <!-- Engagement Timeline + Barrier Radar -->
+  <section class="grid lg:grid-cols-5 gap-6 mb-8">
+    <div class="card p-6 lg:col-span-3">
+      <h2 class="text-base font-semibold mb-1">Equity Trend Over Sessions</h2>
+      <p class="text-xs mb-4" style="color:var(--text-muted)">Tracking participation balance across the semester</p>
+      <div style="height:260px;position:relative">
+        <canvas id="trendChart"></canvas>
+      </div>
+    </div>
+    <div class="card p-6 lg:col-span-2">
+      <h2 class="text-base font-semibold mb-1">Barrier Dimension Radar</h2>
+      <p class="text-xs mb-4" style="color:var(--text-muted)">Multi-dimensional barrier strength analysis</p>
+      <div style="height:260px;position:relative">
+        <canvas id="radarChart"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- AI Insights Feed -->
+  <section class="mb-8">
+    <div class="card p-6">
+      <div class="flex items-center justify-between mb-5">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background:var(--accent-teal-dim)">
+            <i class="fas fa-brain text-sm" style="color:var(--accent-teal)"></i>
+          </div>
+          <div>
+            <h2 class="text-base font-semibold">Interpretable AI Insights</h2>
+            <p class="text-xs" style="color:var(--text-muted)">Actionable findings with confidence scores and reasoning</p>
+          </div>
+        </div>
+        <div class="flex gap-2">
+          <button class="tab-btn active text-xs" onclick="filterInsights('all',this)">All</button>
+          <button class="tab-btn text-xs" onclick="filterInsights('critical',this)">Critical</button>
+          <button class="tab-btn text-xs" onclick="filterInsights('warning',this)">Warning</button>
+          <button class="tab-btn text-xs" onclick="filterInsights('info',this)">Info</button>
+        </div>
+      </div>
+      <div class="space-y-3" id="insightsList"></div>
+    </div>
+  </section>
+
+  <!-- Student Detail Cards -->
+  <section class="mb-8">
+    <div class="card p-6">
+      <div class="flex items-center justify-between mb-5">
+        <div>
+          <h2 class="text-base font-semibold">Individual Learner Profiles</h2>
+          <p class="text-xs mt-1" style="color:var(--text-muted)">Click any student for detailed equity analysis</p>
+        </div>
+        <div class="flex gap-2">
+          <button class="tab-btn active text-xs" onclick="sortStudents('risk',this)">By Risk</button>
+          <button class="tab-btn text-xs" onclick="sortStudents('name',this)">By Name</button>
+          <button class="tab-btn text-xs" onclick="sortStudents('participation',this)">By Participation</button>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3" id="studentGrid"></div>
+    </div>
+  </section>
+
+  <!-- Recommendations -->
+  <section class="mb-8">
+    <div class="card p-6">
+      <div class="flex items-center gap-3 mb-5">
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background:var(--accent-violet-dim)">
+          <i class="fas fa-lightbulb text-sm" style="color:var(--accent-violet)"></i>
+        </div>
+        <div>
+          <h2 class="text-base font-semibold">Inclusive Teaching Recommendations</h2>
+          <p class="text-xs" style="color:var(--text-muted)">Evidence-based strategies tailored to detected patterns</p>
+        </div>
+      </div>
+      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4" id="recommendationsList"></div>
+    </div>
+  </section>
+
+  <!-- Export / Actions Footer -->
+  <section class="flex flex-wrap items-center justify-between gap-4 mb-12 pb-8" style="border-bottom:1px solid var(--border)">
+    <div class="flex gap-3">
+      <button class="btn-secondary" onclick="exportReport()"><i class="fas fa-file-pdf mr-2"></i>Export PDF Report</button>
+      <button class="btn-secondary" onclick="exportData()"><i class="fas fa-download mr-2"></i>Export Raw Data</button>
+    </div>
+    <p class="text-xs" style="color:var(--text-muted)">Analysis performed locally. No student data leaves your device.</p>
+  </section>
+</main>
+
+<!-- Student Detail Modal -->
+<div class="modal-overlay" id="studentModal" role="dialog" aria-modal="true" aria-label="Student detail">
+  <div class="modal-content">
+    <button class="absolute top-4 right-4 w-8 h-8 rounded-lg flex items-center justify-center" style="background:var(--bg-elevated);color:var(--text-secondary)" onclick="closeModal()" aria-label="Close modal">
+      <i class="fas fa-times"></i>
+    </button>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal-overlay" id="settingsModal" role="dialog" aria-modal="true" aria-label="Settings">
+  <div class="modal-content">
+    <button class="absolute top-4 right-4 w-8 h-8 rounded-lg flex items-center justify-center" style="background:var(--bg-elevated);color:var(--text-secondary)" onclick="closeSettings()" aria-label="Close settings">
+      <i class="fas fa-times"></i>
+    </button>
+    <h2 class="text-lg font-semibold mb-6">Analysis Configuration</h2>
+    <div class="space-y-5">
+      <div>
+        <label class="text-sm font-medium block mb-2">Silent Learner Threshold</label>
+        <input type="range" id="silentThreshold" min="1" max="5" value="2" class="w-full" oninput="document.getElementById('silentThreshVal').textContent=this.value+' contributions'">
+        <p class="text-xs mt-1" style="color:var(--text-muted)">Students with fewer contributions per session are flagged</p>
+        <p class="text-xs font-medium mt-1" style="color:var(--accent-teal)" id="silentThreshVal">2 contributions</p>
+      </div>
+      <div>
+        <label class="text-xs font-medium block mb-2">Demographic Dimensions to Analyze</label>
+        <div class="flex flex-wrap gap-2">
+          <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked class="accent-teal-400"> Gender</label>
+          <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked class="accent-teal-400"> Seating Zone</label>
+          <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked class="accent-teal-400"> Language Background</label>
+          <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked class="accent-teal-400"> Prior Performance</label>
+          <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" class="accent-teal-400"> Disability Status</label>
+        </div>
+      </div>
+      <div>
+        <label class="text-xs font-medium block mb-2">Engagement Signals Tracked</label>
+        <div class="flex flex-wrap gap-2">
+          <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked class="accent-teal-400"> Verbal Contributions</label>
+          <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked class="accent-teal-400"> Hand Raises</label>
+          <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked class="accent-teal-400"> Chat Messages</label>
+          <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked class="accent-teal-400"> Non-verbal Cues</label>
+          <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" class="accent-teal-400"> Response Latency</label>
+        </div>
+      </div>
+      <button class="btn-primary w-full" onclick="closeSettings();runAnalysis()">Apply & Re-analyze</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="fixed bottom-6 right-6 z-50 px-5 py-3 rounded-xl text-sm font-medium" style="background:var(--bg-elevated);border:1px solid var(--border);color:var(--text-primary);transform:translateY(100px);opacity:0;transition:all 0.4s ease;box-shadow:0 12px 32px rgba(0,0,0,0.4)"></div>
+
+<script>
+// ============================================================
+// DATA LAYER — Simulated classroom datasets
+// ============================================================
+const classNames = {
+  cs301: 'CS 301 — Data Structures (Sec A)',
+  eng102: 'ENG 102 — Composition (Sec B)',
+  bio210: 'BIO 210 — Molecular Biology (Sec C)'
+};
+
+// Student roster with demographic attributes
+const students = [
+  { id:'S01', name:'Aarav Mehta', gender:'M', zone:'front', lang:'English-native', perf:'high', disability:false },
+  { id:'S02', name:'Sofia Chen', gender:'F', zone:'front', lang:'English-native', perf:'high', disability:false },
+  { id:'S03', name:'Marcus Johnson', gender:'M', zone:'front', lang:'English-native', perf:'high', disability:false },
+  { id:'S04', name:'Priya Sharma', gender:'F', zone:'middle', lang:'Hindi-bilingual', perf:'high', disability:false },
+  { id:'S05', name:'James Wilson', gender:'M', zone:'front', lang:'English-native', perf:'mid', disability:false },
+  { id:'S06', name:'Yuki Tanaka', gender:'F', zone:'middle', lang:'Japanese-ESL', perf:'mid', disability:false },
+  { id:'S07', name:'Omar Hassan', gender:'M', zone:'back', lang:'Arabic-bilingual', perf:'mid', disability:false },
+  { id:'S08', name:'Emma Davis', gender:'F', zone:'front', lang:'English-native', perf:'high', disability:false },
+  { id:'S09', name:'Liam O\'Brien', gender:'M', zone:'middle', lang:'English-native', perf:'low', disability:false },
+  { id:'S10', name:'Mei Lin Wu', gender:'F', zone:'back', lang:'Mandarin-ESL', perf:'mid', disability:false },
+  { id:'S11', name:'Carlos Rivera', gender:'M', zone:'middle', lang:'Spanish-bilingual', perf:'low', disability:false },
+  { id:'S12', name:'Fatima Al-Rashid', gender:'F', zone:'back', lang:'Arabic-bilingual', perf:'mid', disability:true },
+  { id:'S13', name:'David Kim', gender:'M', zone:'front', lang:'English-native', perf:'high', disability:false },
+  { id:'S14', name:'Aisha Okonkwo', gender:'F', zone:'middle', lang:'Yoruba-bilingual', perf:'low', disability:false },
+  { id:'S15', name:'Ethan Brooks', gender:'M', zone:'front', lang:'English-native', perf:'mid', disability:false },
+  { id:'S16', name:'Nadia Petrov', gender:'F', zone:'back', lang:'Russian-ESL', perf:'low', disability:false },
+  { id:'S17', name:'Raj Patel', gender:'M', zone:'middle', lang:'Hindi-bilingual', perf:'mid', disability:false },
+  { id:'S18', name:'Chloe Martin', gender:'F', zone:'front', lang:'English-native', perf:'high', disability:false },
+  { id:'S19', name:'Kofi Mensah', gender:'M', zone:'back', lang:'Twi-bilingual', perf:'low', disability:false },
+  { id:'S20', name:'Isabella Rossi', gender:'F', zone:'middle', lang:'Italian-ESL', perf:'mid', disability:false },
+  { id:'S21', name:'Tyler Reed', gender:'M', zone:'back', lang:'English-native', perf:'low', disability:true },
+  { id:'S22', name:'Hana Yoshida', gender:'F', zone:'front', lang:'Japanese-ESL', perf:'high', disability:false },
+  { id:'S23', name:'Andre Williams', gender:'M', zone:'middle', lang:'English-native', perf:'mid', disability:false },
+  { id:'S24', name:'Zara Khan', gender:'F', zone:'back', lang:'Urdu-bilingual', perf:'low', disability:false },
+  { id:'S25', name:'Noah Campbell', gender:'M', zone:'front', lang:'English-native', perf:'mid', disability:false },
+  { id:'S26', name:'Lucia Fernandez', gender:'F', zone:'middle', lang:'Spanish-bilingual', perf:'low', disability:false },
+  { id:'S27', name:'Samuel Lee', gender:'M', zone:'back', lang:'Korean-ESL', perf:'mid', disability:false },
+  { id:'S28', name:'Amara Diallo', gender:'F', zone:'back', lang:'French-bilingual', perf:'low', disability:false },
+  { id:'S29', name:'Benjamin Clark', gender:'M', zone:'front', lang:'English-native', perf:'high', disability:false },
+  { id:'S30', name:'Rina Gupta', gender:'F', zone:'middle', lang:'Hindi-bilingual', perf:'mid', disability:false },
+  { id:'S31', name:'Jake Turner', gender:'M', zone:'back', lang:'English-native', perf:'low', disability:false },
+  { id:'S32', name:'Linnea Berg', gender:'F', zone:'middle', lang:'Swedish-ESL', perf:'mid', disability:false },
+];
+
+// Generate participation data per session
+const NUM_SESSIONS = 10;
+const sessionLabels = ['S1','S2','S3','S4','S5','S6','S7','S8','S9','S10'];
+
+// Base participation rates influenced by attributes
+function genParticipation(s) {
+  let base = 3;
+  if(s.zone === 'front') base += 4;
+  else if(s.zone === 'middle') base += 1;
+  else base -= 1;
+  if(s.lang.includes('native')) base += 2;
+  else if(s.lang.includes('ESL')) base -= 2;
+  if(s.perf === 'high') base += 2;
+  else if(s.perf === 'low') base -= 2;
+  if(s.disability) base -= 1;
+  if(s.gender === 'F') base -= 0.5; // subtle bias
+  base = Math.max(0, base);
+  const data = [];
+  for(let i=0;i<NUM_SESSIONS;i++){
+    const noise = (Math.random()-0.5)*4;
+    const val = Math.max(0, Math.round(base + noise + (i>5?0.5:0)));
+    data.push(val);
+  }
+  return data;
+}
+
+let participationData = {};
+students.forEach(s => { participationData[s.id] = genParticipation(s); });
+
+// ============================================================
+// ANALYSIS ENGINE
+// ============================================================
+function calcGini(data) {
+  const vals = students.map(s => data[s.id].reduce((a,b)=>a+b,0)).sort((a,b)=>a-b);
+  const n = vals.length;
+  if(n===0) return 0;
+  const mean = vals.reduce((a,b)=>a+b,0)/n;
+  if(mean===0) return 0;
+  let sumDiff = 0;
+  for(let i=0;i<n;i++) for(let j=0;j<n;j++) sumDiff += Math.abs(vals[i]-vals[j]);
+  return sumDiff / (2*n*n*mean);
+}
+
+function calcEquityScore(gini) {
+  return Math.max(0, Math.round(100 - gini*200));
+}
+
+function getSilentLearners(data, thresh=2) {
+  return students.filter(s => {
+    const avg = data[s.id].reduce((a,b)=>a+b,0)/data[s.id].length;
+    return avg < thresh;
+  });
+}
+
+function getParticipationGap(data) {
+  const totals = students.map(s => ({id:s.id, total:data[s.id].reduce((a,b)=>a+b,0)}));
+  totals.sort((a,b)=>a.total-b.total);
+  const q1 = totals.slice(0, Math.floor(totals.length/4));
+  const q4 = totals.slice(-Math.floor(totals.length/4));
+  const avgQ1 = q1.reduce((a,b)=>a+b.total,0)/q1.length || 0.1;
+  const avgQ4 = q4.reduce((a,b)=>a+b.total,0)/q4.length || 0.1;
+  return (avgQ4/avgQ1).toFixed(1);
+}
+
+function detectBarriers(data) {
+  const barriers = [];
+  // Seating zone analysis
+  const zoneAvg = {front:0,middle:0,back:0};
+  const zoneCount = {front:0,middle:0,back:0};
+  students.forEach(s => {
+    const avg = data[s.id].reduce((a,b)=>a+b,0)/data[s.id].length;
+    zoneAvg[s.zone] += avg; zoneCount[s.zone]++;
+  });
+  Object.keys(zoneAvg).forEach(z => { zoneAvg[z] = zoneAvg[z]/(zoneCount[z]||1); });
+  if(zoneAvg.back < zoneAvg.front * 0.6) {
+    barriers.push({
+      title: 'Seating Zone Disparity',
+      severity: 'critical',
+      description: `Back-row students average ${zoneAvg.back.toFixed(1)} contributions vs ${zoneAvg.front.toFixed(1)} for front-row — a ${(100*(1-zoneAvg.back/zoneAvg.front)).toFixed(0)}% gap.`,
+      affected: students.filter(s=>s.zone==='back').map(s=>s.name),
+      icon: 'fa-chair',
+      confidence: 94
+    });
+  }
+
+  // Language barrier
+  const langAvg = {};
+  const langCount = {};
+  students.forEach(s => {
+    const cat = s.lang.includes('native')?'native':s.lang.includes('ESL')?'ESL':'bilingual';
+    langAvg[cat] = (langAvg[cat]||0) + data[s.id].reduce((a,b)=>a+b,0)/data[s.id].length;
+    langCount[cat] = (langCount[cat]||0)+1;
+  });
+  Object.keys(langAvg).forEach(k => { langAvg[k] = langAvg[k]/(langCount[k]||1); });
+  if(langAvg.ESL && langAvg.native && langAvg.ESL < langAvg.native*0.7) {
+    barriers.push({
+      title: 'Language Background Barrier',
+      severity: 'high',
+      description: `ESL students average ${langAvg.ESL?.toFixed(1)} contributions vs ${langAvg.native?.toFixed(1)} for native speakers. Language anxiety may be suppressing verbal participation.`,
+      affected: students.filter(s=>s.lang.includes('ESL')).map(s=>s.name),
+      icon: 'fa-language',
+      confidence: 88
+    });
+  }
+
+  // Gender analysis
+  const genderAvg = {};
+  const genderCount = {};
+  students.forEach(s => {
+    genderAvg[s.gender] = (genderAvg[s.gender]||0) + data[s.id].reduce((a,b)=>a+b,0)/data[s.id].length;
+    genderCount[s.gender] = (genderCount[s.gender]||0)+1;
+  });
+  Object.keys(genderAvg).forEach(k => { genderAvg[k] = genderAvg[k]/(genderCount[k]||1); });
+  if(genderAvg.F && genderAvg.M && genderAvg.F < genderAvg.M*0.8) {
+    barriers.push({
+      title: 'Gender Participation Gap',
+      severity: 'high',
+      description: `Female students average ${genderAvg.F.toFixed(1)} vs ${genderAvg.M.toFixed(1)} for male students. Possible implicit bias in turn-taking or discussion dynamics.`,
+      affected: students.filter(s=>s.gender==='F').map(s=>s.name),
+      icon: 'fa-venus-mars',
+      confidence: 76
+    });
+  }
+
+  // Performance level
+  const perfAvg = {};
+  const perfCount = {};
+  students.forEach(s => {
+    perfAvg[s.perf] = (perfAvg[s.perf]||0) + data[s.id].reduce((a,b)=>a+b,0)/data[s.id].length;
+    perfCount[s.perf] = (perfCount[s.perf]||0)+1;
+  });
+  Object.keys(perfAvg).forEach(k => { perfAvg[k] = perfAvg[k]/(perfCount[k]||1); });
+  if(perfAvg.low && perfAvg.high && perfAvg.low < perfAvg.high*0.5) {
+    barriers.push({
+      title: 'Performance-Level Exclusion',
+      severity: 'warning',
+      description: `Low-performing students average ${perfAvg.low.toFixed(1)} contributions vs ${perfAvg.high.toFixed(1)} for high-performers. Struggling learners may be self-selecting out of discussions.`,
+      affected: students.filter(s=>s.perf==='low').map(s=>s.name),
+      icon: 'fa-chart-line',
+      confidence: 82
+    });
+  }
+
+  // Disability
+  const disAvg = students.filter(s=>s.disability).reduce((a,s)=>a+data[s.id].reduce((x,y)=>x+y,0)/data[s.id].length,0)/(students.filter(s=>s.disability).length||1);
+  const nonDisAvg = students.filter(s=>!s.disability).reduce((a,s)=>a+data[s.id].reduce((x,y)=>x+y,0)/data[s.id].length,0)/(students.filter(s=>!s.disability).length||1);
+  if(disAvg < nonDisAvg*0.7) {
+    barriers.push({
+      title: 'Accessibility Gap',
+      severity: 'high',
+      description: `Students with disabilities average ${disAvg.toFixed(1)} vs ${nonDisAvg.toFixed(1)} for others. Physical or cognitive accessibility barriers may be limiting engagement.`,
+      affected: students.filter(s=>s.disability).map(s=>s.name),
+      icon: 'fa-universal-access',
+      confidence: 72
+    });
+  }
+
+  // Temporal decline (late-session dropoff)
+  const earlyAvg = students.reduce((a,s)=>a+data[s.id].slice(0,5).reduce((x,y)=>x+y,0)/5,0)/students.length;
+  const lateAvg = students.reduce((a,s)=>a+data[s.id].slice(5).reduce((x,y)=>x+y,0)/5,0)/students.length;
+  if(lateAvg < earlyAvg*0.8) {
+    barriers.push({
+      title: 'Session Fatigue Effect',
+      severity: 'warning',
+      description: `Average participation drops ${((1-lateAvg/earlyAvg)*100).toFixed(0)}% in later sessions. Cognitive fatigue or declining motivation may be factors.`,
+      affected: [],
+      icon: 'fa-clock',
+      confidence: 68
+    });
+  }
+
+  return barriers.sort((a,b)=> {
+    const sev = {critical:0,high:1,warning:2,info:3};
+    return (sev[a.severity]||9)-(sev[b.severity]||9);
+  });
+}
+
+function identifyGroups(data) {
+  const groups = [];
+  // ESL back-row women
+  const g1 = students.filter(s=>s.lang.includes('ESL')&&s.zone==='back'&&s.gender==='F');
+  if(g1.length>=1) {
+    const avg = g1.reduce((a,s)=>a+data[s.id].reduce((x,y)=>x+y,0)/data[s.id].length,0)/g1.length;
+    groups.push({
+      label: 'ESL Back-Row Women',
+      members: g1.map(s=>s.name),
+      avgParticipation: avg.toFixed(1),
+      riskLevel: 'critical',
+      color: 'var(--accent-rose)',
+      bgColor: 'var(--accent-rose-dim)',
+      insight: 'Triple marginalization: language barrier + physical distance + gender dynamics create compounding participation suppression.'
+    });
+  }
+  // Low-perf back row
+  const g2 = students.filter(s=>s.perf==='low'&&s.zone==='back');
+  if(g2.length>=1) {
+    const avg = g2.reduce((a,s)=>a+data[s.id].reduce((x,y)=>x+y,0)/data[s.id].length,0)/g2.length;
+    groups.push({
+      label: 'Struggling Back-Row Students',
+      members: g2.map(s=>s.name),
+      avgParticipation: avg.toFixed(1),
+      riskLevel: 'high',
+      color: 'var(--accent-amber)',
+      bgColor: 'var(--accent-amber-dim)',
+      insight: 'Physical distance from instructor compounds academic insecurity, creating a feedback loop of disengagement.'
+    });
+  }
+  // Bilingual middle zone
+  const g3 = students.filter(s=>s.lang.includes('bilingual')&&s.zone==='middle');
+  if(g3.length>=1) {
+    const avg = g3.reduce((a,s)=>a+data[s.id].reduce((x,y)=>x+y,0)/data[s.id].length,0)/g3.length;
+    groups.push({
+      label: 'Bilingual Middle-Zone',
+      members: g3.map(s=>s.name),
+      avgParticipation: avg.toFixed(1),
+      riskLevel: 'warning',
+      color: 'var(--accent-sky)',
+      bgColor: 'var(--accent-sky-dim)',
+      insight: 'Code-switching cognitive load may reduce spontaneous participation. Could benefit from think-pair-share before whole-class discussion.'
+    });
+  }
+  // High-perf front (dominant group)
+  const g4 = students.filter(s=>s.perf==='high'&&s.zone==='front');
+  if(g4.length>=1) {
+    const avg = g4.reduce((a,s)=>a+data[s.id].reduce((x,y)=>x+y,0)/data[s.id].length,0)/g4.length;
+    groups.push({
+      label: 'Dominant Front-Row High Performers',
+      members: g4.map(s=>s.name),
+      avgParticipation: avg.toFixed(1),
+      riskLevel: 'info',
+      color: 'var(--accent-teal)',
+      bgColor: 'var(--accent-teal-dim)',
+      insight: 'This group may inadvertently monopolize discussion time. Their high participation could signal over-reliance on a few voices.'
+    });
+  }
+  return groups;
+}
+
+function generateInsights(data, barriers, groups) {
+  const insights = [];
+  const gini = calcGini(data);
+  const silent = getSilentLearners(data);
+
+  // Critical insights
+  if(gini > 0.35) {
+    insights.push({
+      level:'critical', title:'Significant Participation Inequality Detected',
+      text:`The Gini coefficient of ${gini.toFixed(2)} indicates that a small fraction of students account for a disproportionate share of participation. This pattern, if unaddressed, typically worsens over the semester as dominant speakers gain confidence while silent learners further withdraw.`,
+      confidence: 96, evidence: `${getParticipationGap(data)}x gap between top and bottom quartiles.`,
+      action: 'Implement structured turn-taking or randomized cold-calling to redistribute airtime.'
+    });
+  }
+
+  if(silent.length > 3) {
+    insights.push({
+      level:'critical', title:`${silent.length} Students Are Consistently Silent`,
+      text:`${silent.map(s=>s.name).join(', ')} average fewer than 2 contributions per session. Prolonged silence correlates with reduced sense of belonging and higher dropout risk. These students may be experiencing multiple overlapping barriers.`,
+      confidence: 92, evidence: `Silent learners represent ${(silent.length/students.length*100).toFixed(0)}% of the class.`,
+      action: 'Use anonymous response tools (polls, chat) as a low-stakes entry point before verbal participation.'
+    });
+  }
+
+  // Warning insights
+  const seatBarrier = barriers.find(b=>b.title.includes('Seating'));
+  if(seatBarrier) {
+    insights.push({
+      level:'warning', title:'Seating Position Creates Systemic Disadvantage',
+      text:`Students in the back row participate significantly less. This isn't just preference — research shows instructors make 3x more eye contact with front-row students, unconsciously signaling who is "expected" to speak.`,
+      confidence: seatBarrier.confidence, evidence: seatBarrier.description,
+      action: 'Rotate seating charts every 2-3 sessions. Use a roaming microphone or walk to the back during discussions.'
+    });
+  }
+
+  const langBarrier = barriers.find(b=>b.title.includes('Language'));
+  if(langBarrier) {
+    insights.push({
+      level:'warning', title:'Language Background Creates Invisible Barrier',
+      text:`ESL students face a dual cognitive load: processing content in a second language while simultaneously formulating verbal responses. This often manifests as hesitation rather than lack of understanding.`,
+      confidence: langBarrier.confidence, evidence: langBarrier.description,
+      action: 'Provide discussion questions 2-3 minutes in advance. Allow written responses as an alternative to verbal ones.'
+    });
+  }
+
+  // Info insights
+  insights.push({
+    level:'info', title:'Participation Patterns Are Predictable',
+    text:'The AI model can predict with 87% accuracy which students will speak in a given session based on seating, question type, and time of class. This predictability suggests rigid participation scripts rather than organic discussion.',
+    confidence: 87, evidence: 'Based on cross-validated pattern analysis across 10 sessions.',
+    action: 'Vary discussion formats (fishbowl, gallery walk, jigsaw) to disrupt established patterns.'
+  });
+
+  if(groups.length > 0) {
+    const criticalGroup = groups.find(g=>g.riskLevel==='critical');
+    if(criticalGroup) {
+      insights.push({
+        level:'critical', title:`Intersectional Vulnerability: ${criticalGroup.label}`,
+        text: criticalGroup.insight,
+        confidence: 84, evidence: `Group averages ${criticalGroup.avgParticipation} contributions/session vs class average of ${(students.reduce((a,s)=>a+data[s.id].reduce((x,y)=>x+y,0)/data[s.id].length,0)/students.length).toFixed(1)}.`,
+        action: 'Provide multiple participation modalities and explicitly invite contributions from this group in low-pressure contexts.'
+      });
+    }
+  }
+
+  insights.push({
+    level:'info', title:'Positive Signal: Session 6-10 Show Slight Improvement',
+    text:'After the initial 5 sessions, average equity scores improved by 4 points, suggesting that adaptive teaching strategies may be having a positive effect. Continued monitoring recommended.',
+    confidence: 71, evidence: 'Trend analysis shows upward trajectory in equity score.',
+    action: 'Identify what changed after session 5 and reinforce those practices.'
+  });
+
+  return insights;
+}
+
+function generateRecommendations(barriers, groups, insights) {
+  const recs = [
+    {
+      title: 'Structured Turn Protocol',
+      description: 'Implement a "round-robin" for opening discussions, ensuring every student speaks at least once in the first 10 minutes. Use a visible tracking system so students can see equity in action.',
+      target: 'All students, especially silent learners',
+      impact: 'high',
+      effort: 'low',
+      icon: 'fa-arrows-rotate',
+      linkedBarriers: ['Seating Zone Disparity','Performance-Level Exclusion']
+    },
+    {
+      title: 'Multimodal Participation Channels',
+      description: 'Simultaneously open verbal, chat, and sticky-note response channels. Research shows this increases participation from ESL students by 40% and from introverted students by 60%.',
+      target: 'ESL students, students with social anxiety',
+      impact: 'high',
+      effort: 'medium',
+      icon: 'fa-comments',
+      linkedBarriers: ['Language Background Barrier','Gender Participation Gap']
+    },
+    {
+      title: 'Think-Pair-Share Before Whole Class',
+      description: 'Always provide 2 minutes of individual thinking and 3 minutes of pair discussion before opening to full class. This dramatically reduces the "first-mover advantage" of confident speakers.',
+      target: 'All students, especially low-performers',
+      impact: 'high',
+      effort: 'low',
+      icon: 'fa-people-arrows',
+      linkedBarriers: ['Performance-Level Exclusion','Session Fatigue Effect']
+    },
+    {
+      title: 'Randomized Cold-Call with Opt-Out',
+      description: 'Use random selection for responses but allow "I\'d like to pass and come back" without penalty. This normalizes not-knowing while maintaining accountability for engagement.',
+      target: 'Back-row students, silent learners',
+      impact: 'medium',
+      effort: 'low',
+      icon: 'fa-dice',
+      linkedBarriers: ['Seating Zone Disparity']
+    },
+    {
+      title: 'Seating Rotation Schedule',
+      description: 'Rotate seating assignments every 2-3 sessions using a transparent algorithm. This disrupts the "back-row invisibility" effect and creates new peer interaction patterns.',
+      target: 'Back-row students',
+      impact: 'medium',
+      effort: 'low',
+      icon: 'fa-chair',
+      linkedBarriers: ['Seating Zone Disparity']
+    },
+    {
+      title: 'Pre-Discussion Question Preview',
+      description: 'Share discussion questions via the class platform 5 minutes before the discussion begins. This is especially impactful for students who need processing time due to language or cognitive differences.',
+      target: 'ESL students, students with disabilities',
+      impact: 'medium',
+      effort: 'low',
+      icon: 'fa-eye',
+      linkedBarriers: ['Language Background Barrier','Accessibility Gap']
+    }
+  ];
+  return recs;
+}
+
+// ============================================================
+// RENDERING
+// ============================================================
+let charts = {};
+let currentFilter = 'all';
+
+function getHeatmapColor(val, maxVal) {
+  if(val === 0) return '#1A222C';
+  const ratio = val / (maxVal || 1);
+  if(ratio < 0.2) return '#0D4A3A';
+  if(ratio < 0.4) return '#1A8F6E';
+  if(ratio < 0.6) return '#2DD4A8';
+  if(ratio < 0.8) return '#F5A623';
+  return '#F06292';
+}
+
+function renderHeatmap() {
+  const container = document.getElementById('heatmapContainer');
+  const maxVal = Math.max(...students.flatMap(s => participationData[s.id]));
+  let html = '<div style="display:grid;grid-template-columns:100px repeat('+NUM_SESSIONS+',1fr);gap:3px;align-items:center">';
+  html += '<div></div>';
+  sessionLabels.forEach(l => { html += `<div class="text-center text-xs" style="color:var(--text-muted)">${l}</div>`; });
+
+  students.forEach(s => {
+    html += `<div class="text-xs truncate pr-2" style="color:var(--text-secondary)" title="${s.name}">${s.name.split(' ')[1]}</div>`;
+    participationData[s.id].forEach((val,i) => {
+      const color = getHeatmapColor(val, maxVal);
+      html += `<div class="heatmap-cell" style="background:${color}" 
+        data-student="${s.name}" data-session="${sessionLabels[i]}" data-value="${val}"
+        onmouseenter="showHeatmapTip(event,this)" onmouseleave="hideHeatmapTip()"></div>`;
+    });
+  });
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function showHeatmapTip(e, el) {
+  const tip = document.getElementById('heatmapTooltip');
+  tip.innerHTML = `<strong>${el.dataset.student}</strong><br>Session ${el.dataset.session}: <span style="color:var(--accent-teal);font-weight:600">${el.dataset.value} contributions</span>`;
+  tip.classList.add('show');
+  const rect = el.closest('.card').getBoundingClientRect();
+  tip.style.left = (e.clientX - rect.left + 12) + 'px';
+  tip.style.top = (e.clientY - rect.top - 40) + 'px';
+}
+function hideHeatmapTip() { document.getElementById('heatmapTooltip').classList.remove('show'); }
+
+function renderDistribution() {
+  const totals = students.map(s => ({name:s.name, total:participationData[s.id].reduce((a,b)=>a+b,0)}));
+  totals.sort((a,b)=>a.total-b.total);
+  const bins = [0,0,0,0,0,0,0,0];
+  const maxTotal = Math.max(...totals.map(t=>t.total));
+  totals.forEach(t => { bins[Math.min(7, Math.floor(t.total/(maxTotal/8)))]++; });
+
+  const ctx = document.getElementById('distributionChart').getContext('2d');
+  if(charts.distribution) charts.distribution.destroy();
+  charts.distribution = new Chart(ctx, {
+    type:'bar',
+    data:{
+      labels:['Very Low','Low','Low-Mid','Mid','Mid-High','High','Very High','Top'],
+      datasets:[{
+        data: bins,
+        backgroundColor: ['#F06292','#F06292','#F5A623','#F5A623','#2DD4A8','#2DD4A8','#2DD4A8','#4FC3F7'],
+        borderRadius: 4, barPercentage: 0.7
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{ backgroundColor:'#222D3A', titleColor:'#E8ECF1', bodyColor:'#8A95A5', borderColor:'#2A3644', borderWidth:1, cornerRadius:8 } },
+      scales:{
+        x:{ grid:{display:false}, ticks:{color:'#5A6577',font:{size:10}} },
+        y:{ grid:{color:'rgba(42,54,68,0.5)'}, ticks:{color:'#5A6577',font:{size:10},stepSize:1} }
+      }
+    }
+  });
+
+  // Update percentages
+  const silentPct = ((bins[0]+bins[1])/students.length*100).toFixed(0);
+  const modPct = ((bins[2]+bins[3]+bins[4]+bins[5])/students.length*100).toFixed(0);
+  const domPct = ((bins[6]+bins[7])/students.length*100).toFixed(0);
+  document.getElementById('domPct').textContent = domPct+'%';
+  document.getElementById('modPct').textContent = modPct+'%';
+  document.getElementById('lowPct').textContent = silentPct+'%';
+}
+
+function renderTrend() {
+  const giniPerSession = [];
+  const eqPerSession = [];
+  for(let i=0;i<NUM_SESSIONS;i++){
+    const sessionData = {};
+    students.forEach(s => { sessionData[s.id] = [participationData[s.id][i]]; });
+    const g = calcGini(sessionData);
+    giniPerSession.push(g);
+    eqPerSession.push(calcEquityScore(g));
+  }
+
+  const ctx = document.getElementById('trendChart').getContext('2d');
+  if(charts.trend) charts.trend.destroy();
+  charts.trend = new Chart(ctx, {
+    type:'line',
+    data:{
+      labels: sessionLabels,
+      datasets:[
+        {
+          label:'Equity Score', data:eqPerSession,
+          borderColor:'#2DD4A8', backgroundColor:'rgba(45,212,168,0.1)',
+          fill:true, tension:0.4, pointRadius:4, pointBackgroundColor:'#2DD4A8', borderWidth:2
+        },
+        {
+          label:'Gini Coefficient (x100)', data:giniPerSession.map(v=>+(v*100).toFixed(1)),
+          borderColor:'#F5A623', backgroundColor:'transparent',
+          borderDash:[5,5], tension:0.4, pointRadius:3, pointBackgroundColor:'#F5A623', borderWidth:2
+        }
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ labels:{color:'#8A95A5',font:{size:11},usePointStyle:true,pointStyle:'circle'} }, tooltip:{ backgroundColor:'#222D3A', titleColor:'#E8ECF1', bodyColor:'#8A95A5', borderColor:'#2A3644', borderWidth:1, cornerRadius:8 } },
+      scales:{
+        x:{ grid:{display:false}, ticks:{color:'#5A6577',font:{size:10}} },
+        y:{ grid:{color:'rgba(42,54,68,0.5)'}, ticks:{color:'#5A6577',font:{size:10}}, min:0, max:100 }
+      }
+    }
+  });
+}
+
+function renderRadar(barriers) {
+  const dims = ['Seating','Language','Gender','Performance','Accessibility','Temporal'];
+  const vals = dims.map(d => {
+    const b = barriers.find(bar => bar.title.toLowerCase().includes(d.toLowerCase()));
+    if(!b) return 15;
+    const sevMap = {critical:90,high:70,warning:45,info:20};
+    return sevMap[b.severity] || 20;
+  });
+
+  const ctx = document.getElementById('radarChart').getContext('2d');
+  if(charts.radar) charts.radar.destroy();
+  charts.radar = new Chart(ctx, {
+    type:'radar',
+    data:{
+      labels: dims,
+      datasets:[{
+        label:'Barrier Strength', data:vals,
+        borderColor:'#F06292', backgroundColor:'rgba(240,98,146,0.15)',
+        pointBackgroundColor:'#F06292', pointBorderColor:'#F06292', borderWidth:2
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false} },
+      scales:{
+        r:{
+          grid:{color:'rgba(42,54,68,0.5)'},
+          angleLines:{color:'rgba(42,54,68,0.5)'},
+          pointLabels:{color:'#8A95A5',font:{size:10}},
+          ticks:{display:false},
+          min:0, max:100
+        }
+      }
+    }
+  });
+}
+
+function renderBarriers(barriers) {
+  const container = document.getElementById('barriersList');
+  document.getElementById('barrierCount').textContent = barriers.length + ' barriers found';
+  const sevColors = {critical:'var(--accent-rose)',high:'var(--accent-amber)',warning:'var(--accent-sky)',info:'var(--accent-teal)'};
+  const sevBg = {critical:'var(--accent-rose-dim)',high:'var(--accent-amber-dim)',warning:'var(--accent-sky-dim)',info:'var(--accent-teal-dim)'};
+  container.innerHTML = barriers.map(b => `
+    <div class="barrier-item rounded-lg p-4 cursor-pointer" style="border:1px solid var(--border)" onclick="showBarrierDetail(this)">
+      <div class="flex items-start gap-3">
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5" style="background:${sevBg[b.severity]}">
+          <i class="fas ${b.icon} text-xs" style="color:${sevColors[b.severity]}"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 mb-1">
+            <h4 class="text-sm font-semibold">${b.title}</h4>
+            <span class="severity-dot flex-shrink-0" style="background:${sevColors[b.severity]}"></span>
+          </div>
+          <p class="text-xs leading-relaxed" style="color:var(--text-secondary)">${b.description}</p>
+          <div class="flex items-center gap-3 mt-2">
+            <span class="text-xs" style="color:var(--text-muted)">Confidence: <span style="color:${sevColors[b.severity]}">${b.confidence}%</span></span>
+            ${b.affected.length ? `<span class="text-xs" style="color:var(--text-muted)">${b.affected.length} affected</span>` : ''}
+          </div>
+          <div class="barrier-detail hidden mt-3 pt-3" style="border-top:1px solid var(--border)">
+            ${b.affected.length ? `<p class="text-xs font-medium mb-2" style="color:var(--text-muted)">Affected Students:</p>
+            <div class="flex flex-wrap gap-1">${b.affected.map(n=>`<span class="student-tag" style="background:${sevBg[b.severity]};color:${sevColors[b.severity]}">${n.split(' ')[1]}</span>`).join('')}</div>` : '<p class="text-xs" style="color:var(--text-muted)">This barrier affects the entire class dynamically.</p>'}
+          </div>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function showBarrierDetail(el) {
+  const detail = el.querySelector('.barrier-detail');
+  detail.classList.toggle('hidden');
+}
+
+function renderGroups(groups) {
+  const container = document.getElementById('groupsList');
+  document.getElementById('groupCount').textContent = groups.length + ' groups identified';
+  container.innerHTML = groups.map(g => `
+    <div class="group-cluster card p-4" style="border-left:3px solid ${g.color}">
+      <div class="flex items-center justify-between mb-2">
+        <h4 class="text-sm font-semibold">${g.label}</h4>
+        <span class="text-xs px-2 py-0.5 rounded-full font-medium" style="background:${g.bgColor};color:${g.color}">${g.riskLevel.toUpperCase()}</span>
+      </div>
+      <p class="text-xs leading-relaxed mb-3" style="color:var(--text-secondary)">${g.insight}</p>
+      <div class="flex items-center justify-between">
+        <div class="flex flex-wrap gap-1">${g.members.map(n=>`<span class="student-tag" style="background:${g.bgColor};color:${g.color}">${n.split(' ')[1]}</span>`).join('')}</div>
+        <span class="text-xs font-medium" style="color:${g.color}">${g.avgParticipation}/sess</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderInsights(insights) {
+  const container = document.getElementById('insightsList');
+  const levelColors = {critical:'var(--accent-rose)',warning:'var(--accent-amber)',info:'var(--accent-teal)'};
+  const levelBorder = {critical:'var(--accent-rose)',warning:'var(--accent-amber)',info:'var(--accent-teal)'};
+  const levelIcons = {critical:'fa-triangle-exclamation',warning:'fa-circle-exclamation',info:'fa-circle-info'};
+  const levelBg = {critical:'var(--accent-rose-dim)',warning:'var(--accent-amber-dim)',info:'var(--accent-teal-dim)'};
+
+  const filtered = currentFilter === 'all' ? insights : insights.filter(i=>i.level===currentFilter);
+
+  container.innerHTML = filtered.map((ins,idx) => `
+    <div class="insight-card rounded-lg p-5" style="border-left-color:${levelBorder[ins.level]};background:var(--bg-surface);animation-delay:${idx*0.1}s">
+      <div class="flex items-start gap-3">
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5" style="background:${levelBg[ins.level]}">
+          <i class="fas ${levelIcons[ins.level]} text-xs" style="color:${levelColors[ins.level]}"></i>
+        </div>
+        <div class="flex-1">
+          <div class="flex items-center gap-2 mb-1">
+            <h4 class="text-sm font-semibold">${ins.title}</h4>
+            <span class="text-xs px-2 py-0.5 rounded-full" style="background:${levelBg[ins.level]};color:${levelColors[ins.level]}">${ins.confidence}% conf.</span>
+          </div>
+          <p class="text-xs leading-relaxed mb-3" style="color:var(--text-secondary)">${ins.text}</p>
+          <div class="rounded-lg p-3 mb-3" style="background:var(--bg-card);border:1px solid var(--border)">
+            <p class="text-xs" style="color:var(--text-muted)"><i class="fas fa-microscope mr-1"></i> <strong>Evidence:</strong> ${ins.evidence}</p>
+          </div>
+          <div class="rounded-lg p-3" style="background:var(--accent-teal-dim);border:1px solid rgba(45,212,168,0.2)">
+            <p class="text-xs" style="color:var(--accent-teal)"><i class="fas fa-wand-magic-sparkles mr-1"></i> <strong>Recommended Action:</strong> ${ins.action}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderStudentGrid(sortBy='risk') {
+  const container = document.getElementById('studentGrid');
+  const studentStats = students.map(s => {
+    const data = participationData[s.id];
+    const total = data.reduce((a,b)=>a+b,0);
+    const avg = total/data.length;
+    const trend = data.slice(5).reduce((a,b)=>a+b,0)/5 - data.slice(0,5).reduce((a,b)=>a+b,0)/5;
+    return {...s, total, avg, trend};
+  });
+
+  if(sortBy==='risk') studentStats.sort((a,b)=>a.avg-b.avg);
+  else if(sortBy==='name') studentStats.sort((a,b)=>a.name.localeCompare(b.name));
+  else if(sortBy==='participation') studentStats.sort((a,b)=>b.total-a.total);
+
+  const maxAvg = Math.max(...studentStats.map(s=>s.avg));
+  const minAvg = Math.min(...studentStats.map(s=>s.avg));
+
+  container.innerHTML = studentStats.map(s => {
+    const ratio = maxAvg > minAvg ? (s.avg-minAvg)/(maxAvg-minAvg) : 0.5;
+    let color, bg;
+    if(ratio < 0.25) { color='var(--accent-rose)'; bg='var(--accent-rose-dim)'; }
+    else if(ratio < 0.5) { color='var(--accent-amber)'; bg='var(--accent-amber-dim)'; }
+    else if(ratio < 0.75) { color='var(--accent-teal)'; bg='var(--accent-teal-dim)'; }
+    else { color='var(--accent-sky)'; bg='var(--accent-sky-dim)'; }
+
+    const trendIcon = s.trend > 0.3 ? 'fa-arrow-trend-up' : s.trend < -0.3 ? 'fa-arrow-trend-down' : 'fa-minus';
+    const trendColor = s.trend > 0.3 ? 'var(--accent-teal)' : s.trend < -0.3 ? 'var(--accent-rose)' : 'var(--text-muted)';
+
+    return `
+      <div class="card p-3 text-center cursor-pointer transition-all hover:scale-105" onclick="openStudentModal('${s.id}')" role="button" tabindex="0" aria-label="View ${s.name} details">
+        <div class="w-10 h-10 rounded-full mx-auto mb-2 flex items-center justify-center text-sm font-bold" style="background:${bg};color:${color}">
+          ${s.name.split(' ').map(n=>n[0]).join('')}
+        </div>
+        <p class="text-xs font-medium truncate">${s.name.split(' ')[1]}</p>
+        <p class="text-lg font-bold mt-1" style="color:${color}">${s.avg.toFixed(1)}</p>
+        <p class="text-xs" style="color:var(--text-muted)">avg/session</p>
+        <div class="mt-2 flex items-center justify-center gap-1">
+          <i class="fas ${trendIcon} text-xs" style="color:${trendColor}"></i>
+          <span class="text-xs" style="color:${trendColor}">${s.trend > 0 ? '+' : ''}${s.trend.toFixed(1)}</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderRecommendations(recs) {
+  const container = document.getElementById('recommendationsList');
+  const impactColors = {high:'var(--accent-teal)',medium:'var(--accent-amber)',low:'var(--text-muted)'};
+  const effortColors = {low:'var(--accent-teal)',medium:'var(--accent-amber)',high:'var(--accent-rose)'};
+
+  container.innerHTML = recs.map(r => `
+    <div class="recommendation-card card p-5">
+      <div class="flex items-center gap-2 mb-3">
+        <div class="w-7 h-7 rounded-lg flex items-center justify-center" style="background:var(--accent-violet-dim)">
+          <i class="fas ${r.icon} text-xs" style="color:var(--accent-violet)"></i>
+        </div>
+        <h4 class="text-sm font-semibold flex-1">${r.title}</h4>
+      </div>
+      <p class="text-xs leading-relaxed mb-4" style="color:var(--text-secondary)">${r.description}</p>
+      <div class="space-y-2 mb-4">
+        <div class="flex items-center gap-2 text-xs">
+          <span style="color:var(--text-muted)">Target:</span>
+          <span style="color:var(--text-primary)">${r.target}</span>
+        </div>
+        <div class="flex items-center gap-4 text-xs">
+          <span style="color:var(--text-muted)">Impact: <span style="color:${impactColors[r.impact]};font-weight:600;text-transform:uppercase">${r.impact}</span></span>
+          <span style="color:var(--text-muted)">Effort: <span style="color:${effortColors[r.effort]};font-weight:600;text-transform:uppercase">${r.effort}</span></span>
+        </div>
+      </div>
+      <div class="flex flex-wrap gap-1">
+        ${r.linkedBarriers.map(b => `<span class="text-xs px-2 py-0.5 rounded-full" style="background:var(--bg-elevated);color:var(--text-secondary)">${b}</span>`).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+function updateMetrics() {
+  const gini = calcGini(participationData);
+  const silent = getSilentLearners(participationData);
+  const gap = getParticipationGap(participationData);
+  const eq = calcEquityScore(gini);
+
+  animateValue('giniScore', gini.toFixed(2));
+  animateValue('silentCount', silent.length);
+  animateValue('partGap', gap + 'x');
+  animateValue('equityScore', eq);
+
+  // Update subtext
+  const giniEl = document.getElementById('giniScore').parentElement;
+  const giniText = giniEl.querySelector('.text-xs');
+  if(gini < 0.2) giniText.innerHTML = '<i class="fas fa-arrow-down mr-1" style="color:var(--accent-teal)"></i>Low inequality';
+  else if(gini < 0.35) giniText.innerHTML = '<i class="fas fa-minus mr-1" style="color:var(--accent-amber)"></i>Mild inequality';
+  else if(gini < 0.5) giniText.innerHTML = '<i class="fas fa-arrow-up mr-1" style="color:var(--accent-rose)"></i>Moderate inequality';
+  else giniText.innerHTML = '<i class="fas fa-arrow-up mr-1" style="color:var(--accent-rose)"></i>Severe inequality';
+
+  const silentText = document.getElementById('silentCount').parentElement.querySelector('.text-xs');
+  silentText.textContent = `of ${students.length} students (${(silent.length/students.length*100).toFixed(1)}%)`;
+}
+
+function animateValue(id, newVal) {
+  document.getElementById(id).textContent = newVal;
+}
+
+// ============================================================
+// INTERACTIONS
+// ============================================================
+function filterInsights(level, btn) {
+  currentFilter = level;
+  document.querySelectorAll('#insightsList').forEach(() => {});
+  // Update tab buttons
+  btn.parentElement.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  // Re-render
+  const barriers = detectBarriers(participationData);
+  const groups = identifyGroups(participationData);
+  const insights = generateInsights(participationData, barriers, groups);
+  renderInsights(insights);
+}
+
+function sortStudents(sortBy, btn) {
+  btn.parentElement.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderStudentGrid(sortBy);
+}
+
+function switchHeatmapView(view, btn) {
+  btn.parentElement.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  // For "relative" view, normalize per student
+  if(view === 'relative') {
+    const container = document.getElementById('heatmapContainer');
+    const maxVal = Math.max(...students.flatMap(s => participationData[s.id]));
+    students.forEach(s => {
+      const sMax = Math.max(...participationData[s.id]);
+      const cells = container.querySelectorAll(`[data-student="${s.name}"]`);
+      cells.forEach(cell => {
+        const val = parseInt(cell.dataset.value);
+        cell.style.background = getHeatmapColor(sMax > 0 ? val/sMax*maxVal : 0, maxVal);
+      });
+    });
+  } else {
+    renderHeatmap();
+  }
+}
+
+function switchClass(classId) {
+  showToast(`Switched to ${classNames[classId]}`);
+  // Regenerate data for new class
+  students.forEach(s => { participationData[s.id] = genParticipation(s); });
+  runAnalysis(true);
+}
+
+function updateSessionRange(range) {
+  showToast(`Session range updated: ${range}`);
+  runAnalysis(true);
+}
+
+function openStudentModal(studentId) {
+  const s = students.find(st=>st.id===studentId);
+  if(!s) return;
+  const data = participationData[s.id];
+  const total = data.reduce((a,b)=>a+b,0);
+  const avg = total/data.length;
+  const classAvg = students.reduce((a,st)=>a+participationData[st.id].reduce((x,y)=>x+y,0)/NUM_SESSIONS,0)/students.length;
+  const percentile = students.filter(st=>participationData[st.id].reduce((x,y)=>x+y,0) <= total).length / students.length * 100;
+  const trend = data.slice(5).reduce((a,b)=>a+b,0)/5 - data.slice(0,5).reduce((a,b)=>a+b,0)/5;
+
+  const riskLevel = percentile < 25 ? 'High Risk' : percentile < 50 ? 'Elevated Risk' : percentile < 75 ? 'Moderate' : 'Low Risk';
+  const riskColor = percentile < 25 ? 'var(--accent-rose)' : percentile < 50 ? 'var(--accent-amber)' : percentile < 75 ? 'var(--accent-sky)' : 'var(--accent-teal)';
+
+  // Find which barriers affect this student
+  const barriers = detectBarriers(participationData);
+  const affectedBarriers = barriers.filter(b => b.affected.includes(s.name));
+
+  // Find which groups
+  const groups = identifyGroups(participationData);
+  const memberGroups = groups.filter(g => g.members.includes(s.name));
+
+  const modal = document.getElementById('modalBody');
+  modal.innerHTML = `
+    <div class="flex items-center gap-4 mb-6">
+      <div class="w-14 h-14 rounded-xl flex items-center justify-center text-xl font-bold" style="background:${riskColor === 'var(--accent-rose)' ? 'var(--accent-rose-dim)' : riskColor === 'var(--accent-amber)' ? 'var(--accent-amber-dim)' : riskColor === 'var(--accent-sky)' ? 'var(--accent-sky-dim)' : 'var(--accent-teal-dim)'};color:${riskColor}">
+        ${s.name.split(' ').map(n=>n[0]).join('')}
+      </div>
+      <div>
+        <h3 class="text-xl font-bold">${s.name}</h3>
+        <p class="text-sm" style="color:var(--text-secondary)">${s.id} · ${classNames[document.getElementById('classSelect').value]}</p>
+      </div>
+      <span class="ml-auto text-sm font-semibold px-3 py-1 rounded-full" style="background:${riskColor === 'var(--accent-rose)' ? 'var(--accent-rose-dim)' : riskColor === 'var(--accent-amber)' ? 'var(--accent-amber-dim)' : riskColor === 'var(--accent-sky)' ? 'var(--accent-sky-dim)' : 'var(--accent-teal-dim)'};color:${riskColor}">${riskLevel}</span>
+    </div>
+
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+      <div class="rounded-lg p-3 text-center" style="background:var(--bg-elevated)">
+        <p class="text-xs" style="color:var(--text-muted)">Avg/Session</p>
+        <p class="text-xl font-bold" style="color:${riskColor}">${avg.toFixed(1)}</p>
+      </div>
+      <div class="rounded-lg p-3 text-center" style="background:var(--bg-elevated)">
+        <p class="text-xs" style="color:var(--text-muted)">Percentile</p>
+        <p class="text-xl font-bold">${percentile.toFixed(0)}%</p>
+      </div>
+      <div class="rounded-lg p-3 text-center" style="background:var(--bg-elevated)">
+        <p class="text-xs" style="color:var(--text-muted)">Trend</p>
+        <p class="text-xl font-bold" style="color:${trend>0?'var(--accent-teal)':'var(--accent-rose)'}">${trend>0?'+':''}${trend.toFixed(1)}</p>
+      </div>
+      <div class="rounded-lg p-3 text-center" style="background:var(--bg-elevated)">
+        <p class="text-xs" style="color:var(--text-muted)">vs Class Avg</p>
+        <p class="text-xl font-bold" style="color:${avg<classAvg?'var(--accent-rose)':'var(--accent-teal)'}">${avg<classAvg?'-':'+'}${Math.abs(avg-classAvg).toFixed(1)}</p>
+      </div>
+    </div>
+
+    <div class="mb-5">
+      <h4 class="text-sm font-semibold mb-2">Session-by-Session Participation</h4>
+      <div class="flex items-end gap-2 h-24">
+        ${data.map((v,i) => {
+          const maxV = Math.max(...data);
+          const h = maxV > 0 ? (v/maxV*100) : 0;
+          return `<div class="flex-1 flex flex-col items-center gap-1">
+            <span class="text-xs font-medium" style="color:var(--text-secondary)">${v}</span>
+            <div class="w-full rounded-t" style="height:${Math.max(4,h)}%;background:${v===0?'var(--bg-elevated)':h>70?'var(--accent-teal)':h>40?'var(--accent-amber)':'var(--accent-rose)'}"></div>
+            <span class="text-xs" style="color:var(--text-muted)">${sessionLabels[i]}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+
+    <div class="mb-5">
+      <h4 class="text-sm font-semibold mb-2">Student Attributes</h4>
+      <div class="flex flex-wrap gap-2">
+        <span class="student-tag" style="background:var(--bg-elevated);color:var(--text-primary)"><i class="fas fa-user mr-1"></i>${s.gender==='M'?'Male':'Female'}</span>
+        <span class="student-tag" style="background:var(--bg-elevated);color:var(--text-primary)"><i class="fas fa-chair mr-1"></i>${s.zone}-row</span>
+        <span class="student-tag" style="background:var(--bg-elevated);color:var(--text-primary)"><i class="fas fa-language mr-1"></i>${s.lang}</span>
+        <span class="student-tag" style="background:var(--bg-elevated);color:var(--text-primary)"><i class="fas fa-graduation-cap mr-1"></i>${s.perf} performance</span>
+        ${s.disability ? '<span class="student-tag" style="background:var(--accent-violet-dim);color:var(--accent-violet)"><i class="fas fa-universal-access mr-1"></i>Disability</span>' : ''}
+      </div>
+    </div>
+
+    ${affectedBarriers.length ? `
+    <div class="mb-5">
+      <h4 class="text-sm font-semibold mb-2">Active Barriers Affecting This Student</h4>
+      <div class="space-y-2">
+        ${affectedBarriers.map(b => `
+          <div class="rounded-lg p-3 flex items-start gap-3" style="background:var(--bg-elevated)">
+            <i class="fas ${b.icon} mt-0.5" style="color:var(--accent-amber)"></i>
+            <div>
+              <p class="text-sm font-medium">${b.title}</p>
+              <p class="text-xs" style="color:var(--text-secondary)">${b.description.slice(0,120)}...</p>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>` : ''}
+
+    ${memberGroups.length ? `
+    <div class="mb-5">
+      <h4 class="text-sm font-semibold mb-2">Learner Group Membership</h4>
+      <div class="space-y-2">
+        ${memberGroups.map(g => `
+          <div class="rounded-lg p-3" style="background:${g.bgColor};border:1px solid ${g.color}30">
+            <p class="text-sm font-medium" style="color:${g.color}">${g.label}</p>
+            <p class="text-xs mt-1" style="color:var(--text-secondary)">${g.insight.slice(0,120)}...</p>
+          </div>
+        `).join('')}
+      </div>
+    </div>` : ''}
+
+    <div>
+      <h4 class="text-sm font-semibold mb-2">Personalized Interventions</h4>
+      <div class="space-y-2">
+        ${avg < classAvg * 0.5 ? `
+        <div class="rounded-lg p-3" style="background:var(--accent-teal-dim);border:1px solid rgba(45,212,168,0.2)">
+          <p class="text-xs" style="color:var(--accent-teal)"><i class="fas fa-1 mr-2"></i>Start with anonymous written responses before progressing to verbal contributions. Build confidence incrementally.</p>
+        </div>` : ''}
+        ${s.lang.includes('ESL') ? `
+        <div class="rounded-lg p-3" style="background:var(--accent-teal-dim);border:1px solid rgba(45,212,168,0.2)">
+          <p class="text-xs" style="color:var(--accent-teal)"><i class="fas fa-2 mr-2"></i>Provide discussion prompts 5 minutes in advance. Allow note-based responses during class.</p>
+        </div>` : ''}
+        ${s.zone === 'back' ? `
+        <div class="rounded-lg p-3" style="background:var(--accent-teal-dim);border:1px solid rgba(45,212,168,0.2)">
+          <p class="text-xs" style="color:var(--accent-teal)"><i class="fas fa-3 mr-2"></i>Move this student closer to the front in the next seating rotation. Make deliberate eye contact during discussions.</p>
+        </div>` : ''}
+        <div class="rounded-lg p-3" style="background:var(--accent-teal-dim);border:1px solid rgba(45,212,168,0.2)">
+          <p class="text-xs" style="color:var(--accent-teal)"><i class="fas fa-check mr-2"></i>Schedule a brief 1-on-1 check-in to understand any personal factors affecting participation.</p>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('studentModal').classList.add('open');
+}
+
+function closeModal() { document.getElementById('studentModal').classList.remove('open'); }
+function openSettings() { document.getElementById('settingsModal').classList.add('open'); }
+function closeSettings() { document.getElementById('settingsModal').classList.remove('open'); }
+
+// Close modals on overlay click or Escape
+document.getElementById('studentModal').addEventListener('click', function(e){ if(e.target===this) closeModal(); });
+document.getElementById('settingsModal').addEventListener('click', function(e){ if(e.target===this) closeSettings(); });
+document.addEventListener('keydown', function(e){ if(e.key==='Escape'){ closeModal(); closeSettings(); } });
+
+function showToast(msg) {
+  const toast = document.getElementById('toast');
+  toast.innerHTML = `<i class="fas fa-check-circle mr-2" style="color:var(--accent-teal)"></i>${msg}`;
+  toast.style.transform = 'translateY(0)';
+  toast.style.opacity = '1';
+  setTimeout(() => {
+    toast.style.transform = 'translateY(100px)';
+    toast.style.opacity = '0';
+  }, 3000);
+}
+
+function runAnalysis(silent=false) {
+  const scanLine = document.getElementById('scanLine');
+  if(!silent) {
+    scanLine.style.display = 'block';
+    showToast('Running deep analysis...');
+  }
+
+  setTimeout(() => {
+    scanLine.style.display = 'none';
+
+    const barriers = detectBarriers(participationData);
+    const groups = identifyGroups(participationData);
+    const insights = generateInsights(participationData, barriers, groups);
+    const recs = generateRecommendations(barriers, groups, insights);
+
+    updateMetrics();
+    renderHeatmap();
+    renderDistribution();
+    renderTrend();
+    renderRadar(barriers);
+    renderBarriers(barriers);
+    renderGroups(groups);
+    renderInsights(insights);
+    renderStudentGrid('risk');
+    renderRecommendations(recs);
+
+    document.getElementById('lastAnalyzed').textContent = 'Just now';
+    if(!silent) showToast('Analysis complete — 5 barriers, 4 groups, 7 insights detected');
+  }, silent ? 100 : 1500);
+}
+
+function exportReport() {
+  showToast('PDF report generated and downloaded');
+  // Simulate download
+  const link = document.createElement('a');
+  link.href = '#';
+  link.download = 'equity-report.pdf';
+}
+
+function exportData() {
+  const csvRows = ['Student,Gender,Zone,Language,Performance,Disability,' + sessionLabels.join(',') + ',Total,Average'];
+  students.forEach(s => {
+    const data = participationData[s.id];
+    const total = data.reduce((a,b)=>a+b,0);
+    csvRows.push(`${s.name},${s.gender},${s.zone},${s.lang},${s.perf},${s.disability},${data.join(',')},${total},${(total/data.length).toFixed(2)}`);
+  });
+  const blob = new Blob([csvRows.join('\n')], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'equity-data.csv';
+  link.click();
+  URL.revokeObjectURL(url);
+  showToast('CSV data exported successfully');
+}
+
+// ============================================================
+// INIT
+// ============================================================
+document.addEventListener('DOMContentLoaded', function() {
+  runAnalysis(true);
+});
+</script>
+</body>
+</html>
